@@ -1,0 +1,207 @@
+﻿<!DOCTYPE html>
+<html>
+<head>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="stylesheet" href="~/css/style.css">
+    <script src="https://code.jquery.com/jquery-3.1.1.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script>
+        let chart;
+
+        fetch("https://danepubliczne.imgw.pl/api/data/synop/")
+            .then((response) => response.json())
+            .then((data) => {
+                const select = document.createElement("datalist");
+                select.setAttribute("id", "lista-miast");
+                for (let i = 0; i < data.length; i++) {
+                    const option = document.createElement("option");
+                    option.value = data[i].stacja;
+                    select.appendChild(option);
+                    document.body.appendChild(select);
+                }
+            });
+
+        function getDataFromApi(stacja) {
+            stacja = stacja.replace(/ą/g, "a")
+                .replace(/ć/g, "c")
+                .replace(/ę/g, "e")
+                .replace(/ł/g, "l")
+                .replace(/ń/g, "n")
+                .replace(/ó/g, "o")
+                .replace(/ś/g, "s")
+                .replace(/ż/g, "z")
+                .replace(/ź/g, "z")
+                .replace(/\s+/g, "");
+            stacja = stacja.toLowerCase();
+
+            fetch("https://danepubliczne.imgw.pl/api/data/synop/station/" + stacja)
+                .then((response) => response.json())
+                .then((data) => {
+                    var nazwa = document.getElementById("nazwa").value;
+                    let Stacja = new Station(nazwa, data.data_pomiaru, data.godzina_pomiaru, data.temperatura, data.predkosc_wiatru, data.kierunek_wiatru, data.wilgotnosc_wzgledna, data.suma_opadu, data.cisnienie);
+                    document.getElementById("Stacja").innerHTML = nazwa;
+                    document.getElementById("data_pomiaru").innerHTML = Stacja.data_pomiaru;
+                    document.getElementById("godzina_pomiaru").innerHTML = Stacja.godzina_pomiaru;
+                    document.getElementById("temperatura").innerHTML = Stacja.temperatura;
+                    document.getElementById("predkosc_wiatru").innerHTML = Stacja.predkosc_wiatru;
+                    document.getElementById("kierunek_wiatru").innerHTML = Stacja.kierunek_wiatru;
+                    document.getElementById("wilgotnosc_wzgledna").innerHTML = Stacja.wilgotnosc_wzgledna;
+                    document.getElementById("suma_opadu").innerHTML = Stacja.suma_opadu;
+                    document.getElementById("cisnienie").innerHTML = Stacja.cisnienie;
+
+                    saveDataToDatabase(Stacja);
+                });
+        }
+
+        function saveDataToDatabase(station) {
+            $.ajax({
+                type: "POST",
+                url: "/Home/PostData",
+                data: {
+                    stacja: station.nazwa,
+                    dataPomiaru: station.data_pomiaru,
+                    godzinaPomiaru: station.godzina_pomiaru,
+                    temperatura: station.temperatura,
+                    predkoscWiatru: station.predkosc_wiatru,
+                    kierunekWiatru: station.kierunek_wiatru,
+                    wilgotnoscWzgledna: station.wilgotnosc_wzgledna,
+                    sumaOpadu: station.suma_opadu,
+                    cisnienie: station.cisnienie
+                }
+            });
+        }
+
+        class Station {
+            constructor(nazwa, data_pomiaru, godzina_pomiaru, temperatura, predkosc_wiatru, kierunek_wiatru, wilgotnosc_wzgledna, suma_opadu, cisnienie) {
+                this.nazwa = nazwa;
+                this.data_pomiaru = data_pomiaru;
+                this.godzina_pomiaru = godzina_pomiaru;
+                this.temperatura = temperatura;
+                this.predkosc_wiatru = predkosc_wiatru;
+                this.kierunek_wiatru = kierunek_wiatru;
+                this.wilgotnosc_wzgledna = wilgotnosc_wzgledna;
+                this.suma_opadu = suma_opadu;
+                this.cisnienie = cisnienie;
+            }
+        }
+
+        function generateChart() {
+            const city = document.getElementById('city').value;
+            const startDate = document.getElementById('startDate').value;
+            const endDate = document.getElementById('endDate').value;
+
+            fetch(`/Home/GetWeatherDataForChart?city=${city}&startDate=${startDate}&endDate=${endDate}`)
+                .then(response => response.json())
+                .then(data => {
+                    const labels = data.map(d => new Date(d.dataPomiaru).toLocaleDateString());
+                    const temperatures = data.map(d => d.temperatura);
+
+                    const ctx = document.getElementById('weatherChart').getContext('2d');
+
+                    if (chart) {
+                        chart.destroy();
+                    }
+
+                    chart = new Chart(ctx, {
+                        type: 'line',
+                        data: {
+                            labels: labels,
+                            datasets: [{
+                                label: 'Temperatura (°C)',
+                                data: temperatures,
+                                borderColor: 'rgba(255, 99, 132, 1)',
+                                backgroundColor: 'rgba(255, 99, 132, 0.2)',
+                                fill: false
+                            }]
+                        },
+                        options: {
+                            responsive: true,
+                            scales: {
+                                x: {
+                                    display: true,
+                                    title: {
+                                        display: true,
+                                        text: 'Data'
+                                    }
+                                },
+                                y: {
+                                    display: true,
+                                    title: {
+                                        display: true,
+                                        text: 'Temperatura (°C)'
+                                    }
+                                }
+                            }
+                        }
+                    });
+                });
+        }
+    </script>
+</head>
+<body>
+    <div id='container'>
+        <h1>Sprawdź pogodę</h1>
+        <input type="text" id="nazwa" list="lista-miast" placeholder="Wpisz nazwę miasta">
+        <input type="button" value="Sprawdź" onclick="getDataFromApi(document.getElementById('nazwa').value)">
+
+        <h2>Stacja</h2>
+        <div id='Stacja' class='box'></div>
+        <h2>Data pomiaru</h2>
+        <div id='data_pomiaru' class='box'></div>
+        <h2>Godzina pomiaru</h2>
+        <div id='godzina_pomiaru' class='box'></div>
+        <h2>Temperatura</h2>
+        <div id='temperatura' class='box'></div>
+        <h2>Prędkość wiatru</h2>
+        <div id='predkosc_wiatru' class='box'></div>
+        <h2>Kierunek wiatru</h2>
+        <div id='kierunek_wiatru' class='box'></div>
+        <h2>Wilgotność względna</h2>
+        <div id='wilgotnosc_wzgledna' class='box'></div>
+        <h2>Suma opadu</h2>
+        <div id='suma_opadu' class='box'></div>
+        <h2>Ciśnienie</h2>
+        <div id='cisnienie' class='box'></div>
+
+        <h2>Wykres danych pogodowych</h2>
+        <input type="text" id="city" placeholder="Wpisz nazwę miasta">
+        <input type="date" id="startDate" placeholder="Data początkowa">
+        <input type="date" id="endDate" placeholder="Data końcowa">
+        <input type="button" value="Generuj wykres" onclick="generateChart()">
+        <canvas id="weatherChart"></canvas>
+
+        <h2>Zapisane dane pogodowe</h2>
+        <table>
+            <thead>
+                <tr>
+                    <th>Stacja</th>
+                    <th>Data pomiaru</th>
+                    <th>Godzina pomiaru</th>
+                    <th>Temperatura</th>
+                    <th>Prędkość wiatru</th>
+                    <th>Kierunek wiatru</th>
+                    <th>Wilgotność względna</th>
+                    <th>Suma opadu</th>
+                    <th>Ciśnienie</th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (var item in Model)
+                {
+                    <tr>
+                        <td>@item.Stacja</td>
+                        <td>@item.DataPomiaru</td>
+                        <td>@item.GodzinaPomiaru</td>
+                        <td>@item.Temperatura</td>
+                        <td>@item.PredkoscWiatru</td>
+                        <td>@item.KierunekWiatru</td>
+                        <td>@item.WilgotnoscWzgledna</td>
+                        <td>@item.SumaOpadu</td>
+                        <td>@item.Cisnienie</td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    </div>
+</body>
+</html>
